@@ -1,1 +1,129 @@
-{"metadata":{"kaggle":{"accelerator":"none","dataSources":[{"sourceId":10873,"sourceType":"datasetVersion","datasetId":7666},{"sourceId":7498888,"sourceType":"datasetVersion","datasetId":4366639},{"sourceId":60971560,"sourceType":"kernelVersion"}],"dockerImageVersionId":30635,"isInternetEnabled":false,"language":"python","sourceType":"script","isGpuEnabled":false},"kernelspec":{"display_name":"Python 3","language":"python","name":"python3"},"language_info":{"codemirror_mode":{"name":"ipython","version":3},"file_extension":".py","mimetype":"text/x-python","name":"python","nbconvert_exporter":"python","pygments_lexer":"ipython3","version":"3.10.12"}},"nbformat_minor":4,"nbformat":4,"cells":[{"cell_type":"code","source":"# %% [code] {\"execution\":{\"iopub.execute_input\":\"2024-01-28T16:44:35.752887Z\",\"iopub.status.busy\":\"2024-01-28T16:44:35.752468Z\",\"iopub.status.idle\":\"2024-01-28T16:44:35.760977Z\",\"shell.execute_reply\":\"2024-01-28T16:44:35.759874Z\",\"shell.execute_reply.started\":\"2024-01-28T16:44:35.752856Z\"}}\nimport warnings\nwarnings.filterwarnings('ignore')\n\nimport random\nimport pandas as pd\nimport numpy as np\nimport matplotlib.pyplot as plt\nimport matplotlib.image as mpimg\nimport plotly\nimport plotly.graph_objects as go\n%matplotlib inline\n\n\n# %% [code] {\"execution\":{\"iopub.execute_input\":\"2024-01-28T16:44:35.762969Z\",\"iopub.status.busy\":\"2024-01-28T16:44:35.762610Z\",\"iopub.status.idle\":\"2024-01-28T16:44:35.775618Z\",\"shell.execute_reply\":\"2024-01-28T16:44:35.774602Z\",\"shell.execute_reply.started\":\"2024-01-28T16:44:35.762941Z\"}}\nimport os\n\nfrom sklearn.calibration import calibration_curve\nfrom sklearn.model_selection import train_test_split\nfrom sklearn.metrics import confusion_matrix\nimport itertools\n\nimport torch\nimport torchvision\nimport torch.nn as nn\nimport torch.nn.functional as F\nfrom torch.autograd import Variable\nfrom torch.optim import lr_scheduler\n\n# %% [code] {\"execution\":{\"iopub.execute_input\":\"2024-01-28T16:44:35.791535Z\",\"iopub.status.busy\":\"2024-01-28T16:44:35.791102Z\",\"iopub.status.idle\":\"2024-01-28T16:44:35.796348Z\",\"shell.execute_reply\":\"2024-01-28T16:44:35.795264Z\",\"shell.execute_reply.started\":\"2024-01-28T16:44:35.791502Z\"}}\nnp.random.seed(42)\n\n# %% [code] {\"execution\":{\"iopub.execute_input\":\"2024-01-28T16:44:35.804837Z\",\"iopub.status.busy\":\"2024-01-28T16:44:35.804122Z\",\"iopub.status.idle\":\"2024-01-28T16:44:35.809790Z\",\"shell.execute_reply\":\"2024-01-28T16:44:35.808799Z\",\"shell.execute_reply.started\":\"2024-01-28T16:44:35.804793Z\"}}\nPATH_TO_DATA = '../input/digit-recognizer/'\n\n# %% [code] {\"execution\":{\"iopub.execute_input\":\"2024-01-28T16:44:35.811860Z\",\"iopub.status.busy\":\"2024-01-28T16:44:35.811555Z\",\"iopub.status.idle\":\"2024-01-28T16:44:41.248995Z\",\"shell.execute_reply\":\"2024-01-28T16:44:41.247856Z\",\"shell.execute_reply.started\":\"2024-01-28T16:44:35.811834Z\"}}\ntrain = pd.read_csv('/kaggle/input/mnist-digit/train.csv', dtype=np.float32)\ntest = pd.read_csv('/kaggle/input/mnist-digit/test.csv', dtype=np.float32)\n\n# %% [code] {\"execution\":{\"iopub.execute_input\":\"2024-01-28T16:44:41.251562Z\",\"iopub.status.busy\":\"2024-01-28T16:44:41.251110Z\",\"iopub.status.idle\":\"2024-01-28T16:44:41.291691Z\",\"shell.execute_reply\":\"2024-01-28T16:44:41.290447Z\",\"shell.execute_reply.started\":\"2024-01-28T16:44:41.251526Z\"}}\ntrain.head()\n\n# %% [code] {\"execution\":{\"iopub.execute_input\":\"2024-01-28T16:44:41.293144Z\",\"iopub.status.busy\":\"2024-01-28T16:44:41.292849Z\",\"iopub.status.idle\":\"2024-01-28T16:44:41.299224Z\",\"shell.execute_reply\":\"2024-01-28T16:44:41.298107Z\",\"shell.execute_reply.started\":\"2024-01-28T16:44:41.293117Z\"}}\ndef plot_distribution_classes(x_values, y_values):\n\n    fig = go.Figure(data=[go.Bar(\n                x=x_values, \n                y=y_values,\n                text=y_values\n    )])\n\n    fig.update_layout(height=600, width=1200, title_text=\"Distribution of classes\")\n    fig.update_xaxes(type=\"category\")\n\n    fig.show()\n\n# %% [code] {\"execution\":{\"iopub.status.busy\":\"2024-01-28T17:41:56.816687Z\",\"iopub.execute_input\":\"2024-01-28T17:41:56.817226Z\",\"iopub.status.idle\":\"2024-01-28T17:41:56.841912Z\",\"shell.execute_reply.started\":\"2024-01-28T17:41:56.817186Z\",\"shell.execute_reply\":\"2024-01-28T17:41:56.840380Z\"}}\nx = np.sort(train.label.unique())\ny = train.label.value_counts().sort_index()\n\nplot_distribution_classes(x, y)\n\n# %% [code] {\"execution\":{\"iopub.execute_input\":\"2024-01-28T16:44:41.325793Z\",\"iopub.status.busy\":\"2024-01-28T16:44:41.325436Z\",\"iopub.status.idle\":\"2024-01-28T16:44:41.334670Z\",\"shell.execute_reply\":\"2024-01-28T16:44:41.333451Z\",\"shell.execute_reply.started\":\"2024-01-28T16:44:41.325762Z\"}}\ndef preprocessing(train, test, split_train_size = 0.2):\n    \n    targets = train.label.values\n    features = train.drop([\"label\"], axis = 1).values\n    \n    features = features/255.\n    X_test = test.values/255.\n     \n    X_train, X_val, y_train, y_val = train_test_split(features,\n                                                      targets,\n                                                      test_size = split_train_size,\n                                                      random_state = 42) \n    \n    X_train = torch.from_numpy(X_train)\n    y_train = torch.from_numpy(y_train).type(torch.LongTensor) \n\n    X_val = torch.from_numpy(X_val)\n    y_val = torch.from_numpy(y_val).type(torch.LongTensor) \n    \n    X_test = torch.from_numpy(X_test)\n    \n    return X_train, y_train, X_val, y_val, X_test\n\n# %% [code] {\"execution\":{\"iopub.execute_input\":\"2024-01-28T16:44:41.336543Z\",\"iopub.status.busy\":\"2024-01-28T16:44:41.336140Z\",\"iopub.status.idle\":\"2024-01-28T16:44:41.858443Z\",\"shell.execute_reply\":\"2024-01-28T16:44:41.857251Z\",\"shell.execute_reply.started\":\"2024-01-28T16:44:41.336510Z\"}}\nX_train, y_train, X_val, y_val, X_test = preprocessing(train, test)\n\nprint(f'Shape of training data: {X_train.shape}')\nprint(f'Shape training labels: {y_train.shape}')\nprint(f'Shape of validation data: {X_val.shape}')\nprint(f'Shape of valiation labels: {y_val.shape}')\nprint(f'Shape of testing data: {X_test.shape}')\n\n# %% [code] {\"execution\":{\"iopub.execute_input\":\"2024-01-28T16:44:41.860894Z\",\"iopub.status.busy\":\"2024-01-28T16:44:41.860201Z\",\"iopub.status.idle\":\"2024-01-28T16:44:41.871582Z\",\"shell.execute_reply\":\"2024-01-28T16:44:41.870235Z\",\"shell.execute_reply.started\":\"2024-01-28T16:44:41.860851Z\"}}\nBATCH_SIZE = 100\nN_ITER = 2500\nEPOCHS = 9\n\ntrain_tensor = torch.utils.data.TensorDataset(X_train, y_train)\nval_tensor = torch.utils.data.TensorDataset(X_val, y_val)\ntest_tensor = torch.utils.data.TensorDataset(X_test)\n\ntrain_loader = torch.utils.data.DataLoader(train_tensor, \n                                           batch_size = BATCH_SIZE,\n                                           shuffle = True)\nval_loader = torch.utils.data.DataLoader(val_tensor, \n                                         batch_size = BATCH_SIZE, \n                                         shuffle = False)\ntest_loader = torch.utils.data.DataLoader(test_tensor, \n                                          batch_size = BATCH_SIZE,\n                                          shuffle = False)\n\n# %% [code] {\"execution\":{\"iopub.execute_input\":\"2024-01-28T16:44:41.874156Z\",\"iopub.status.busy\":\"2024-01-28T16:44:41.873711Z\",\"iopub.status.idle\":\"2024-01-28T16:44:41.883304Z\",\"shell.execute_reply\":\"2024-01-28T16:44:41.882481Z\",\"shell.execute_reply.started\":\"2024-01-28T16:44:41.874117Z\"}}\ndef display_images(graph_indexes = np.arange(9)):\n    \n    plt.figure(figsize=(12,12))\n    for graph_index in graph_indexes:\n        \n        index = random.randint(1, X_train.shape[0])\n        \n        label = y_train[index].numpy()\n        \n        plt.subplot(330 + 1 + graph_index)\n        plt.title('Label: %s \\n'%label,\n                 fontsize=18)\n        \n        plt.imshow(X_train[index].resize(28,28), cmap=plt.get_cmap('gray'))\n        \n    plt.subplots_adjust(bottom = 0.001)\n    plt.subplots_adjust(top = 0.99)\n    \n    plt.show()\n\n# %% [code] {\"execution\":{\"iopub.execute_input\":\"2024-01-28T16:44:41.884519Z\",\"iopub.status.busy\":\"2024-01-28T16:44:41.884225Z\",\"iopub.status.idle\":\"2024-01-28T16:44:43.715868Z\",\"shell.execute_reply\":\"2024-01-28T16:44:43.714100Z\",\"shell.execute_reply.started\":\"2024-01-28T16:44:41.884494Z\"}}\ndisplay_images()\n\n# %% [code] {\"execution\":{\"iopub.execute_input\":\"2024-01-28T16:44:43.722601Z\",\"iopub.status.busy\":\"2024-01-28T16:44:43.722243Z\",\"iopub.status.idle\":\"2024-01-28T16:44:43.736401Z\",\"shell.execute_reply\":\"2024-01-28T16:44:43.735383Z\",\"shell.execute_reply.started\":\"2024-01-28T16:44:43.722571Z\"}}\nclass CNNModel(nn.Module):\n    def __init__(self):\n        super(CNNModel, self).__init__()\n\n        self.c1 = nn.Conv2d(in_channels=1, out_channels=16, kernel_size=(5,5), stride=1, padding=0)\n        self.relu1 = nn.ReLU()\n\n        self.maxpool1 = nn.MaxPool2d(kernel_size=(2,2))\n\n        self.dropout1 = nn.Dropout(0.25)\n\n        self.c2 = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=(3,3), stride=1, padding=0)\n        self.relu2 = nn.ReLU()\n\n        self.maxpool2 = nn.MaxPool2d(kernel_size=(2,2))\n\n        self.dropout2 = nn.Dropout(0.25)\n\n        self.fc1 = nn.Linear(32*5*5, 256)\n        \n        self.dropout3 = nn.Dropout(0.25)\n     \n        self.fc2 = nn.Linear(256, 10)\n        \n    def forward(self, x):\n        \n        out = self.c1(x) \n        out = self.relu1(out) \n        out = self.maxpool1(out) \n        out = self.dropout1(out) \n        \n        out = self.c2(out) \n        out = self.relu2(out) \n        out = self.maxpool2(out) \n        out = self.dropout2(out) \n        \n        out = out.view(out.size(0), -1) \n        out = self.fc1(out) \n        out = self.dropout3(out)\n        out = self.fc2(out) \n        \n        return out\n\n# %% [code] {\"execution\":{\"iopub.execute_input\":\"2024-01-28T16:44:43.737974Z\",\"iopub.status.busy\":\"2024-01-28T16:44:43.737661Z\",\"iopub.status.idle\":\"2024-01-28T16:44:43.749948Z\",\"shell.execute_reply\":\"2024-01-28T16:44:43.748747Z\",\"shell.execute_reply.started\":\"2024-01-28T16:44:43.737947Z\"}}\ndef fit(epoch):\n    \n    print(\"Training...\")\n    model.train()\n    \n    exp_lr_scheduler.step()\n    \n    train_running_loss = 0.0\n    train_running_correct = 0\n    train_running_lr = optimizer.param_groups[0]['lr']\n    \n    for batch_idx, (data, target) in enumerate(train_loader):\n        data, target = Variable(data.view(BATCH_SIZE, 1, 28, 28)), Variable(target)\n        \n        optimizer.zero_grad()\n        output = model(data)\n        loss = criterion(output, target)\n        \n        train_running_loss += loss.item()\n        _, preds = torch.max(output.data, 1)\n        train_running_correct += (preds == target).sum().item()\n        \n        loss.backward()\n        optimizer.step()\n        \n        if (batch_idx + 1) % 50 == 0:\n            print('Train Epoch: {} [{}/{} ({:.0f}%)]\\tLoss: {:.6f}'.format(\n                 epoch + 1, \n                 (batch_idx + 1) * len(data), \n                 len(train_loader.dataset),\n                 BATCH_SIZE * (batch_idx + 1) / len(train_loader), \n                 loss.cpu().detach().numpy())\n                 )\n            \n    train_loss = train_running_loss / len(train_loader.dataset)\n    train_accuracy = 100. * train_running_correct / len(train_loader.dataset)    \n    \n    return train_loss, train_accuracy, train_running_lr\n\n# %% [code] {\"execution\":{\"iopub.execute_input\":\"2024-01-28T16:44:43.752210Z\",\"iopub.status.busy\":\"2024-01-28T16:44:43.751756Z\",\"iopub.status.idle\":\"2024-01-28T16:44:43.764429Z\",\"shell.execute_reply\":\"2024-01-28T16:44:43.763272Z\",\"shell.execute_reply.started\":\"2024-01-28T16:44:43.752144Z\"}}\ndef validate(data_loader):\n    \n    print(\"Validating...\")\n\n    model.eval()\n    val_preds = torch.LongTensor()\n    val_proba = torch.LongTensor()\n\n    val_running_loss = 0.0\n    val_running_correct = 0\n    \n    for data, target in data_loader:\n        data, target = Variable(data.view(BATCH_SIZE, 1, 28, 28), volatile=False), Variable(target)\n        \n        output = model(data)\n        loss = criterion(output, target)\n        \n        val_running_loss += loss.item()\n        pred = output.data.max(1, keepdim=True)[1]\n        proba = torch.nn.functional.softmax(output.data)\n\n        val_running_correct += pred.eq(target.data.view_as(pred)).cpu().sum() \n        \n        val_preds = torch.cat((val_preds, pred), dim=0)\n        val_proba = torch.cat((val_proba, proba))\n\n    val_loss = val_running_loss / len(data_loader.dataset)\n    val_accuracy = 100. * val_running_correct / len(data_loader.dataset) \n    \n    return val_loss, val_accuracy, val_preds, val_proba\n\n# %% [code] {\"execution\":{\"iopub.execute_input\":\"2024-01-28T16:44:43.766450Z\",\"iopub.status.busy\":\"2024-01-28T16:44:43.766008Z\",\"iopub.status.idle\":\"2024-01-28T16:45:54.923390Z\",\"shell.execute_reply\":\"2024-01-28T16:45:54.922262Z\",\"shell.execute_reply.started\":\"2024-01-28T16:44:43.766420Z\"}}\ntrain_loss, train_accuracy = [], []\nval_loss, val_accuracy = [], []\nval_preds, val_proba = [], []\ntrain_lr = []\n\nfor epoch in range(EPOCHS):\n    \n    print(f\"Epoch {epoch+1} of {EPOCHS}\\n\")\n    \n    train_epoch_loss, train_epoch_accuracy, train_epoch_lr = fit(epoch)\n    val_epoch_loss, val_epoch_accuracy, val_epoch_preds, val_epoch_proba = validate(val_loader)\n    \n    train_loss.append(train_epoch_loss)\n    train_accuracy.append(train_epoch_accuracy)\n    train_lr.append(train_epoch_lr)\n    \n    val_loss.append(val_epoch_loss)\n    val_accuracy.append(val_epoch_accuracy)\n    val_preds.append(val_epoch_preds)\n    val_proba.append(val_epoch_proba)\n    \n    print(f\"Train Loss: {train_epoch_loss:.4f}, Train Acc: {train_epoch_accuracy:.2f}\")\n    print(f'Val Loss: {val_epoch_loss:.4f}, Val Acc: {val_epoch_accuracy:.2f}\\n')\n\n\n# %% [code] {\"execution\":{\"iopub.execute_input\":\"2024-01-28T16:45:54.925835Z\",\"iopub.status.busy\":\"2024-01-28T16:45:54.924966Z\",\"iopub.status.idle\":\"2024-01-28T16:45:54.936256Z\",\"shell.execute_reply\":\"2024-01-28T16:45:54.935132Z\",\"shell.execute_reply.started\":\"2024-01-28T16:45:54.925792Z\"}}\ndef plot_history():\n\n    plt.figure(figsize = (20,15))\n    \n    plt.subplot(221)\n    \n    plt.plot(train_accuracy)\n    plt.plot(val_accuracy)\n    plt.title('model accuracy')\n    plt.ylabel('accuracy')\n    plt.xlabel('epoch')\n    plt.legend(['train', 'test'], loc='upper left')\n    plt.grid()\n    \n    \n    plt.subplot(222)\n    plt.plot(train_loss)\n    plt.plot(val_loss)\n    plt.title('model loss')\n    plt.ylabel('loss')\n    plt.xlabel('epoch')\n    plt.legend(['train', 'test'], loc='upper left')\n    plt.grid()\n    \n    plt.subplot(223)\n    plt.plot(train_lr)\n    plt.title('learning rate')\n    plt.ylabel('lr')\n    plt.xlabel('epoch')\n    plt.grid()\n    \n    plt.show()\n\n# %% [code] {\"execution\":{\"iopub.execute_input\":\"2024-01-28T16:45:54.938369Z\",\"iopub.status.busy\":\"2024-01-28T16:45:54.937912Z\",\"iopub.status.idle\":\"2024-01-28T16:45:55.875555Z\",\"shell.execute_reply\":\"2024-01-28T16:45:55.874320Z\",\"shell.execute_reply.started\":\"2024-01-28T16:45:54.938328Z\"}}\nplot_history()\n\n# %% [code] {\"execution\":{\"iopub.execute_input\":\"2024-01-28T16:45:55.877249Z\",\"iopub.status.busy\":\"2024-01-28T16:45:55.876877Z\",\"iopub.status.idle\":\"2024-01-28T16:45:55.887103Z\",\"shell.execute_reply\":\"2024-01-28T16:45:55.885979Z\",\"shell.execute_reply.started\":\"2024-01-28T16:45:55.877217Z\"}}\ndef plot_confusion_matrix(confusion_matrix, \n                          cmap=plt.cm.Reds):\n    \n    classes = range(10)\n    \n    plt.figure(figsize=(8,8))\n    plt.imshow(confusion_matrix, \n               interpolation='nearest', \n               cmap=cmap)\n    plt.title('Confusion matrix')\n    plt.colorbar()\n    tick_marks = np.arange(len(classes))\n    plt.xticks(tick_marks, classes, rotation=45)\n    plt.yticks(tick_marks, classes)\n\n    thresh = confusion_matrix.max() / 2.\n    for i, j in itertools.product(range(confusion_matrix.shape[0]), range(confusion_matrix.shape[1])):\n        plt.text(j, i, confusion_matrix[i, j],\n                 horizontalalignment=\"center\",\n                 color=\"white\" if confusion_matrix[i, j] > thresh else \"black\")\n\n    plt.tight_layout()\n    plt.ylabel('True label')\n    plt.xlabel('Predicted label')\n\n# %% [code] {\"execution\":{\"iopub.execute_input\":\"2024-01-28T16:45:55.889744Z\",\"iopub.status.busy\":\"2024-01-28T16:45:55.888982Z\",\"iopub.status.idle\":\"2024-01-28T16:45:56.674831Z\",\"shell.execute_reply\":\"2024-01-28T16:45:56.673687Z\",\"shell.execute_reply.started\":\"2024-01-28T16:45:55.889702Z\"}}\ny_pred_classes = val_preds[EPOCHS - 1].cpu().numpy().ravel()\n\ncm = confusion_matrix(y_val, y_pred_classes) \n\nplot_confusion_matrix(cm)\n\n# %% [code] {\"execution\":{\"iopub.execute_input\":\"2024-01-28T16:45:56.677610Z\",\"iopub.status.busy\":\"2024-01-28T16:45:56.676796Z\",\"iopub.status.idle\":\"2024-01-28T16:45:56.687566Z\",\"shell.execute_reply\":\"2024-01-28T16:45:56.686550Z\",\"shell.execute_reply.started\":\"2024-01-28T16:45:56.677568Z\"}}\ndef display_predicted_images(graph_indexes = np.arange(9)):\n\n    plt.figure(figsize=(12,12))\n    \n    for graph_index in graph_indexes:\n        \n        index = random.randint(1, X_val.shape[0])\n        \n        predicted_label = y_pred_classes[index]\n        true_label = y_val[index]\n        \n        plt.subplot(330 + 1 + graph_index)\n        plt.title('Predicted label: %s \\n'%predicted_label+\\\n                  'True label %s \\n'%true_label.item(),\n                 fontsize=18)\n        plt.imshow(X_val[index].view(28,28), cmap=plt.get_cmap('gray'))\n        \n    plt.subplots_adjust(bottom = 0.001) \n    plt.subplots_adjust(top = 0.99)\n    plt.show()\n\n# %% [code] {\"execution\":{\"iopub.execute_input\":\"2024-01-28T16:45:56.689827Z\",\"iopub.status.busy\":\"2024-01-28T16:45:56.689464Z\",\"iopub.status.idle\":\"2024-01-28T16:45:58.500872Z\",\"shell.execute_reply\":\"2024-01-28T16:45:58.499485Z\",\"shell.execute_reply.started\":\"2024-01-28T16:45:56.689796Z\"}}\ndisplay_predicted_images()","metadata":{"_uuid":"c183dd40-dfa9-45e6-88f6-a005c082713a","_cell_guid":"546c274f-7425-450f-82e6-d00a7974d2e6","collapsed":false,"jupyter":{"outputs_hidden":false},"trusted":true},"execution_count":null,"outputs":[]}]}
+# -*- coding: utf-8 -*-
+"""inference.ipynb
+
+Automatically generated by Colaboratory.
+
+Original file is located at
+    https://colab.research.google.com/drive/1fU13U6sDEKhaL6W9h-RekhoMRBT0KYPD
+"""
+
+# Commented out IPython magic to ensure Python compatibility.
+import warnings
+warnings.filterwarnings('ignore')
+
+import random
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
+import plotly
+import plotly.graph_objects as go
+# %matplotlib inline
+
+import os
+
+from sklearn.calibration import calibration_curve
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix
+import itertools
+from torch.utils.data import DataLoader, TensorDataset
+import torch
+import torchvision
+import torch.nn as nn
+import torch.nn.functional as F
+from torch.autograd import Variable
+from torch.optim import lr_scheduler
+
+np.random.seed(42)
+
+test = pd.read_csv('/kaggle/input/mnist-digit/test.csv', dtype=np.float32)
+
+BATCH_SIZE = 128
+EPOCHS = 8
+
+test_tensor = torch.utils.data.TensorDataset(X_test, torch.zeros(len(X_test)))  # Adding dummy labels
+
+test_loader = torch.utils.data.DataLoader(test_tensor,
+                                          batch_size=BATCH_SIZE,
+                                          shuffle=False)
+
+class CNNModel(nn.Module):
+    def __init__(self):
+        super(CNNModel, self).__init__()
+
+        self.c1 = nn.Conv2d(in_channels=1, out_channels=16, kernel_size=(5,5), stride=1, padding=0)
+        self.relu1 = nn.ReLU()
+
+        self.maxpool1 = nn.MaxPool2d(kernel_size=(2,2))
+
+        self.dropout1 = nn.Dropout(0.25)
+
+        self.c2 = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=(3,3), stride=1, padding=0)
+        self.relu2 = nn.ReLU()
+
+        self.maxpool2 = nn.MaxPool2d(kernel_size=(2,2))
+
+        self.dropout2 = nn.Dropout(0.25)
+
+        self.fc1 = nn.Linear(32*5*5, 256)
+
+        self.dropout3 = nn.Dropout(0.25)
+
+        self.fc2 = nn.Linear(256, 10)
+
+    def forward(self, x):
+
+        out = self.c1(x)
+        out = self.relu1(out)
+        out = self.maxpool1(out)
+        out = self.dropout1(out)
+
+        out = self.c2(out)
+        out = self.relu2(out)
+        out = self.maxpool2(out)
+        out = self.dropout2(out)
+
+        out = out.view(out.size(0), -1)
+        out = self.fc1(out)
+        out = self.dropout3(out)
+        out = self.fc2(out)
+
+        return out
+
+model = CNNModel()
+
+def test(data_loader):
+
+    print("Testing...")
+
+    model.eval()
+    test_preds = torch.LongTensor()
+    test_proba = torch.FloatTensor()
+
+    test_running_loss = 0.0
+    test_running_correct = 0
+
+    with torch.no_grad():
+        for data, target in data_loader:
+            data, target = Variable(data.view(BATCH_SIZE, 1, 28, 28)), Variable(target).long()
+
+            output = model(data)
+            loss = criterion(output, target)
+
+            test_running_loss += loss.item()
+            pred = output.data.max(1, keepdim=True)[1]
+            proba = torch.nn.functional.softmax(output.data, dim=1)
+
+            test_running_correct += pred.eq(target.data.view_as(pred)).cpu().sum()
+
+            test_preds = torch.cat((test_preds, pred), dim=0)
+            test_proba = torch.cat((test_proba, proba), dim=0)
+
+    test_loss = test_running_loss / len(data_loader.dataset)
+    test_accuracy = 100. * test_running_correct / len(data_loader.dataset)
+
+    return test_loss, test_accuracy, test_preds, test_proba
+
+test_loss, test_accuracy, test_preds, test_proba = test(test_loader)
+
+print(f'Test Loss: {test_loss:.4f}, Test Acc: {test_accuracy:.2f}\n')
